@@ -3,6 +3,7 @@ package mutator
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/pkg/errors"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
@@ -47,13 +48,31 @@ func (m *BasicMutator) podShouldBeIgnored(req *admissionv1beta1.AdmissionRequest
 	return true
 }
 
+// replicaSetUIDLabel is used to avoid colocating pod replicas on same node.
+// This label is set by IPP, not by the user.
+const replicaSetUIDLabel = "node-restriction.kubernetes.io/ipp-rs-uid"
+
 func (m *BasicMutator) createPatch(ctx context.Context, pod *corev1.Pod) ([]jsonpatch.Op, error) {
 	podLabelValue := pod.ObjectMeta.Labels[m.PodLabel]
 	if podLabelValue == "" {
 		// no patch
 		return nil, nil
 	}
+	replicaSetUID := ""
+	for _, or := range pod.ObjectMeta.OwnerReferences {
+		if strings.EqualFold(or.Kind, "ReplicaSet") {
+			replicaSetUID = string(or.UID)
+			break
+		}
+	}
 	var ops []jsonpatch.Op
+	if replicaSetUID != "" {
+		ops = append(ops, jsonpatch.Op{
+			Op:    jsonpatch.OpAdd,
+			Path:  "/metadata/labels/" + jsonpatch.EscapeRFC6901(replicaSetUIDLabel),
+			Value: replicaSetUID,
+		})
+	}
 	toleration := corev1.Toleration{
 		Key:      m.NodeTaint,
 		Operator: corev1.TolerationOpEqual,
@@ -99,6 +118,27 @@ func (m *BasicMutator) createPatch(ctx context.Context, pod *corev1.Pod) ([]json
 				},
 			},
 		},
+	}
+
+	if replicaSetUID != "" {
+		// avoid colocating replicas on same node
+		term := corev1.PodAffinityTerm{
+			LabelSelector: &metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      replicaSetUIDLabel,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{replicaSetUID},
+					},
+				},
+			},
+			TopologyKey: corev1.LabelHostname,
+		}
+		// autoscaler respects requiredDuringSchedulingIgnoredDuringExecution,
+		// but ignores preferredDuringSchedulingIgnoredDuringExecution
+		// https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#does-ca-respect-node-affinity-when-selecting-node-groups-to-scale-up
+		affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution =
+			append(affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, term)
 	}
 	ops = append(ops, jsonpatch.Op{
 		Op:    jsonpatch.OpAdd,
