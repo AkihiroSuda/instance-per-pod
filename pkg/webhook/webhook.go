@@ -7,11 +7,11 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/klog"
 )
 
 var errEmptyBody = errors.New("empty body")
@@ -51,11 +51,11 @@ func HandlerFunc(mutator Mutator) func(w http.ResponseWriter, req *http.Request)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		onBadRequest := func(err error) {
-			glog.Errorf("bad request: %v", err)
+			klog.Errorf("bad request: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		onInternalServerError := func(err error) {
-			glog.Errorf("internal server error: %v", err)
+			klog.Errorf("internal server error: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		if r.Method != http.MethodPost {

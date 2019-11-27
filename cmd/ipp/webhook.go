@@ -1,17 +1,12 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
-	"github.com/golang/glog"
 	"github.com/urfave/cli"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/klog"
 
-	"github.com/AkihiroSuda/instance-per-pod/pkg/drivers"
-	"github.com/AkihiroSuda/instance-per-pod/pkg/drivers/gke"
 	"github.com/AkihiroSuda/instance-per-pod/pkg/mutator"
 	"github.com/AkihiroSuda/instance-per-pod/pkg/webhook"
 )
@@ -34,10 +29,20 @@ var webhookCommand = cli.Command{
 			Name:  "tlskey",
 			Usage: "tls key file",
 		},
-		// GKE driver
 		cli.StringFlag{
-			Name:  "gke-parent",
-			Usage: "gke parent, specified in the format 'projects/*/locations/*/clusters/*'",
+			Name:  "node-label",
+			Usage: "The node label used for the IPP autoscaling node pool. The label value should be \"true\".",
+			Value: "ipp",
+		},
+		cli.StringFlag{
+			Name:  "node-taint",
+			Usage: "The node taint used for the IPP autoscaling node pool. The taint value should be \"true\".",
+			Value: "ipp",
+		},
+		cli.StringFlag{
+			Name:  "pod-label",
+			Usage: "The pod label. The label value can be an arbitrary string.",
+			Value: "ipp-class",
 		},
 	},
 	Action: webhookAction,
@@ -54,38 +59,14 @@ func webhookAction(clicontext *cli.Context) error {
 	if tlsKey == "" {
 		return errors.New("tlskey needs to be specified")
 	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return err
+	mutator := &mutator.BasicMutator{
+		NodeLabel: clicontext.String("node-label"),
+		NodeTaint: clicontext.String("node-taint"),
+		PodLabel:  clicontext.String("pod-label"),
 	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-	ctx := context.TODO()
-	d, err := createDriver(ctx, clicontext, clientset)
-	if err != nil {
-		return err
-	}
-	go func() {
-		derr := d.Run(ctx)
-		if derr != nil {
-			panic(derr)
-		}
-		glog.Info("driver routine stopped")
-	}()
-	mutator := &mutator.BasicMutator{Driver: d}
 	handlerFunc := webhook.HandlerFunc(mutator)
 	const serverPath = "/admission"
-	glog.Infof("webhook starting on %q (%q)", serverPath, addr)
+	klog.Infof("webhook starting on %q (%q)", serverPath, addr)
 	http.HandleFunc(serverPath, handlerFunc)
 	return http.ListenAndServeTLS(addr, tlsCert, tlsKey, nil)
-}
-
-func createDriver(ctx context.Context, clicontext *cli.Context, clientset *kubernetes.Clientset) (drivers.Driver, error) {
-	gkeParent := clicontext.String("gke-parent")
-	if gkeParent == "" {
-		return nil, errors.New("gke-parent needs to be specified")
-	}
-	return gke.New(ctx, clientset, gkeParent)
 }

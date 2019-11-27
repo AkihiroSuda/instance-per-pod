@@ -5,8 +5,8 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-if [ "$#" -ne 3 ]; then
-	echo "Usage: $0 IMAGE GKE_PARENT GCP_SERVICEACCOUNT_JSON"
+if [ "$#" -ne 1 ]; then
+	echo "Usage: $0 IMAGE"
 	exit 1
 fi
 if ! command -v mkcert >/dev/null; then
@@ -14,8 +14,6 @@ if ! command -v mkcert >/dev/null; then
 	exit 1
 fi
 IMAGE="$1"
-GKE_PARENT="$2"
-GCP_SERVICEACCOUNT_JSON="$(base64 -w0 $3)"
 NAMESPACE="ipp-system"
 SERVICE="ipp"
 SAN="${SERVICE}.${NAMESPACE}.svc"
@@ -38,34 +36,6 @@ apiVersion: v1
 metadata:
   name: ${NAMESPACE}
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: ${SERVICE}
-  namespace: ${NAMESPACE}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: ${SERVICE}
-rules:
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: ${SERVICE}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: ${SERVICE}
-subjects:
-- kind: ServiceAccount
-  name: ${SERVICE}
-  namespace: ${NAMESPACE}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -81,7 +51,6 @@ spec:
       labels:
         app: ${SERVICE}
     spec:
-      serviceAccountName: ${SERVICE}
       containers:
       - name: ipp
         image: ${IMAGE}
@@ -89,26 +58,25 @@ spec:
         - webhook
         - --tlscert=/run/secrets/tls/tls.crt
         - --tlskey=/run/secrets/tls/tls.key
-        - --gke-parent=${GKE_PARENT}
-        env:
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: /run/secrets/gcp-sa/json
+# The node label used for the IPP autoscaling node pool.
+# The label value should be "true".
+# NOTE: GKE doesn't seem to support "node-restriction.kubernetes.io/" prefix
+        - --node-label=ipp
+# The node taint used for the same node pool
+# The taint value should be "true".
+        - --node-taint=ipp
+# The pod label, e.g. "ipp-class=class0"
+        - --pod-label=ipp-class
         ports:
         - containerPort: 443
         volumeMounts:
         - name: tls
           readOnly: true
           mountPath: /run/secrets/tls
-        - name: gcp-sa
-          readOnly: true
-          mountPath: /run/secrets/gcp-sa
       volumes:
       - name: tls
         secret:
           secretName: ${SERVICE}-tls
-      - name: gcp-sa
-        secret:
-          secretName: ${SERVICE}-gcp-sa
 ---
 apiVersion: v1
 kind: Secret
@@ -119,15 +87,6 @@ data:
   tls.crt: "${TLSCERT}"
   tls.key: "${TLSKEY}"
 type: kubernetes.io/tls
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${SERVICE}-gcp-sa
-  namespace: ${NAMESPACE}
-data:
-  json: "${GCP_SERVICEACCOUNT_JSON}"
-type: Opaque
 ---
 apiVersion: v1
 kind: Service
