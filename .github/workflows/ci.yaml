@@ -29,6 +29,9 @@ jobs:
 
   # Push image to GitHub Package Registry.
   # See also https://docs.docker.com/docker-hub/builds/
+  #
+  # NOTICE: pulling images from GitHub Package Registry requires authentication, even for PUBLIC images!
+  # https://github.community/t5/GitHub-Actions/docker-pull-from-public-GitHub-Package-Registry-fail-with-quot/td-p/32782
   push:
     # Ensure test job passes before pushing image.
     needs: test

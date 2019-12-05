@@ -32,10 +32,9 @@ Non-GKE clusters should work as well, but not tested.
 Install IPP Admission Webhook:
 
 ```bash
-./ipp.yaml.sh docker.pkg.github.com/akihirosuda/instance-per-pod/ipp:latest | kubectl apply -f -
+docker build -t $IMAGE . && docker push $IMAGE
+./ipp.yaml.sh $IMAGE | kubectl apply -f -
 ```
-
-To install non-`latest` version, you need to specify the image tag accordingly.
 
 You can review the YAML before running `kubectl apply`.
 Note that the YAML contains `Secret` resources.
