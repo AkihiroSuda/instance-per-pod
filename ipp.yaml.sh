@@ -5,15 +5,14 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-if [ "$#" -ne 1 ]; then
-	echo "Usage: $0 IMAGE"
-	exit 1
+IMAGE=docker.pkg.github.com/AkihiroSuda/instance-per-pod/ipp:latest
+if [ "$#" -ne 0 ]; then
+    IMAGE="$1"
 fi
 if ! command -v mkcert >/dev/null; then
 	echo "Missing mkcert (https://github.com/FiloSottile/mkcert)"
 	exit 1
 fi
-IMAGE="$1"
 NAMESPACE="ipp-system"
 SERVICE="ipp"
 SAN="${SERVICE}.${NAMESPACE}.svc"
@@ -30,7 +29,7 @@ TLSCA="$(base64 -w0 $tmp/rootCA.pem)"
 rm -rf $tmp
 
 cat <<EOF
-# WARNING: this yaml contains secret values!
+# WARNING: this yaml contains a Secret resource!
 kind: Namespace
 apiVersion: v1
 metadata:
