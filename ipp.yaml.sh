@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-IMAGE=docker.pkg.github.com/AkihiroSuda/instance-per-pod/ipp:latest
+IMAGE=docker.pkg.github.com/akihirosuda/instance-per-pod/ipp:latest
 if [ "$#" -ne 0 ]; then
     IMAGE="$1"
 fi
