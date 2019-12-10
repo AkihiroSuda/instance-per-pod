@@ -50,7 +50,7 @@ func (m *BasicMutator) podShouldBeIgnored(req *admissionv1beta1.AdmissionRequest
 
 // replicaSetUIDLabel is used to avoid colocating pod replicas on same node.
 // This label is set by IPP, not by the user.
-const replicaSetUIDLabel = "node-restriction.kubernetes.io/ipp-rs-uid"
+const replicaSetUIDLabel = "ipp-rs-uid"
 
 func (m *BasicMutator) createPatch(ctx context.Context, pod *corev1.Pod) ([]jsonpatch.Op, error) {
 	podLabelValue := pod.ObjectMeta.Labels[m.PodLabel]

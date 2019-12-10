@@ -4,9 +4,16 @@ Instance-per-Pod Admission Webhook (IPP) creates an IaaS instance per Kubernetes
 
 Unlike Kata Containers, IPP can even mitigate CPU vulnerabilities when baremetal instances (e.g. [EC2 `i3.metal`](https://aws.amazon.com/jp/ec2/instance-types/i3/)) are used.
 
-## Supported clusters
+## Requirements
 
-Tested on Google Kubernetes Engine (GKE), but any cluster with [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler) should work.
+* [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler) must be enabled.
+
+* [NodeRestriction Admission Controller](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#noderestriction) or its equivalent must be enabled.
+  Without NodeRestriction or its equivalent, IPP is not useful because a compromised node can run privileged pods on other nodes using the kubelet's credential.
+  NodeRestriction is enabled by default on typical clusters including Google Kubernetes Engine (GKE) and Amazon Elastic Kubernetes Service (EKS).
+  However, [it is not enabled on Azure Kubernetes Service (AKS)](https://github.com/Azure/aks-engine/issues/2422), as of December 2019.
+
+Tested on Google Kubernetes Engine (GKE).
 
 ## How it works
 
@@ -19,7 +26,7 @@ See [#2](https://github.com/AkihiroSuda/instance-per-pod/issues/2) for the desig
 ### Step 1
 
 Create a GKE node pool with the following configuration:
-* Enable autoscaling. The minimum number of the nodes must be >= 1.
+* Enable autoscaling. The minimum number of the nodes can be zero.
 * Add node label: `"ipp" = "true"`
 * Add node taint: `"ipp" = "true"`  (`NO_SCHEDULE` mode)
 
@@ -140,5 +147,3 @@ The current implementation of IPP Admission Webhook is implemented using Pod Ant
 For large clusters, we should also support affinity-less mode, which would explicitly call the IaaS API for creating and removing dedicated IaaS instances.
 Acutally, an early release of IPP Admission Webhook ([v0.0.1](https://github.com/AkihiroSuda/instance-per-pod/tree/v0.0.1)) was implemented like that.
 
-### Node label
-We should use [`node-restriction.kubernetes.io/` prefixed label](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-isolation-restriction) to prevent compromised nodes from modifying the label, but [seems unsupported for GKE](https://github.com/AkihiroSuda/instance-per-pod/issues/1).
