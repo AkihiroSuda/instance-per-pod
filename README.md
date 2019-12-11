@@ -147,3 +147,7 @@ The current implementation of IPP Admission Webhook is implemented using Pod Ant
 For large clusters, we should also support affinity-less mode, which would explicitly call the IaaS API for creating and removing dedicated IaaS instances.
 Acutally, an early release of IPP Admission Webhook ([v0.0.1](https://github.com/AkihiroSuda/instance-per-pod/tree/v0.0.1)) was implemented like that.
 
+
+### DaemonSet
+
+IPP Admission Webhook does not mutate DaemonSet, so that system daemon Pods can be colocated with IPP Pods.
